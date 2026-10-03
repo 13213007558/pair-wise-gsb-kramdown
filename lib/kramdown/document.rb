@@ -42,6 +42,7 @@ require 'kramdown/parser'
 require 'kramdown/converter'
 require 'kramdown/options'
 require 'kramdown/utils'
+require 'kramdown/translation'
 
 module Kramdown
 
