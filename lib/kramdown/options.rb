@@ -640,6 +640,79 @@ module Kramdown
       Used by: Kramdown converter
     EOF
 
+    define(:sanitize, Boolean, false, <<~EOF)
+      Sanitize the element tree before conversion
+
+      If this option is +true+, the element tree is sanitized after parsing
+      and before conversion: only the elements, attributes and URL schemes
+      declared by the sanitize_policy option are kept.
+
+      The sanitizer works on the structure of the element tree, so the same
+      rules apply to elements generated from kramdown syntax (e.g. links and
+      images) and to raw HTML elements embedded in the document. Attribute
+      values are never modified (in particular, no string replacement based
+      cleaning of unsupported content like CSS is performed) and URLs are
+      never requested.
+
+      Each removal or rewrite is reported as a warning together with the
+      source line (if available) and the reason.
+
+      Default: false
+      Used by: all converters
+    EOF
+
+    define(:sanitize_policy, Object, {}, <<~EOF) do |val|
+      The policy used when the sanitize option is active
+
+      The value needs to be a Hash (or a YAML hash when given as String) with
+      any of the following keys; omitted keys fall back to the default policy
+      (see Kramdown::Utils::Sanitizer::DEFAULT_POLICY):
+
+      [elements] An array of allowed HTML element names (e.g. +p+, +a+, +img+).
+
+      [attributes] A hash mapping an element name (or +*+ for all elements) to
+                   an array of allowed attribute names. Entries given here
+                   replace the default entries for the same element.
+
+      [schemes] An array of allowed URL schemes for URL attributes like +href+
+                and +src+ (e.g. +http+, +https+, +mailto+). If +data+ is
+                included, only whitelisted image data URLs (base64 encoded
+                PNG/GIF/JPEG/WebP images) are allowed.
+
+      [relative] How relative URLs (including fragment-only URLs) are treated:
+                 +:allow+ keeps them, +:remove+ removes the attribute.
+
+      [mode] How disallowed elements are handled: +:remove+ deletes an element
+             together with its content, +:strip+ deletes the element but keeps
+             its text content. The two strategies cannot be mixed - the chosen
+             mode applies to the whole document.
+
+      Default: {}
+      Used by: all converters
+    EOF
+      val = simple_hash_validator(val, :sanitize_policy)
+      val = val.each_with_object({}) do |(k, v), hash|
+        hash[k.kind_of?(String) ? str_to_sym(k) : k] = v
+      end
+      unknown = val.keys - [:elements, :attributes, :schemes, :relative, :mode]
+      unless unknown.empty?
+        raise Kramdown::Error, "Unknown keys in option sanitize_policy: #{unknown.join(', ')}"
+      end
+      val[:elements] = simple_array_validator(val[:elements], :sanitize_policy) if val[:elements]
+      val[:schemes] = simple_array_validator(val[:schemes], :sanitize_policy) if val[:schemes]
+      if val[:attributes]
+        val[:attributes] = simple_hash_validator(val[:attributes], :sanitize_policy)
+        val[:attributes] = val[:attributes].each_with_object({}) do |(k, v), hash|
+          hash[k.to_s] = simple_array_validator(v, :sanitize_policy)
+        end
+      end
+      [:relative, :mode].each do |key|
+        next unless val[key]
+        val[key] = val[key].kind_of?(String) ? str_to_sym(val[key]) : val[key]
+      end
+      val
+    end
+
   end
 
 end

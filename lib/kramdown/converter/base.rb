@@ -57,6 +57,11 @@ module Kramdown
         @root = root
         @data = {}
         @warnings = []
+        if @options[:sanitize]
+          @root = root.dup
+          @root.children = Marshal.load(Marshal.dump(root.children))
+          @warnings.concat(::Kramdown::Utils::Sanitizer.sanitize(@root, @options))
+        end
       end
       private_class_method(:new, :allocate)
 
@@ -104,7 +109,7 @@ module Kramdown
         if !converter.options[:template].empty? && converter.apply_template_before?
           apply_template(converter, '')
         end
-        result = converter.convert(tree)
+        result = converter.convert(converter.root)
         if result.respond_to?(:encode!) && result.encoding != Encoding::BINARY
           result.encode!(tree.options[:encoding] ||
                          (raise ::Kramdown::Error, "Missing encoding option on root element"))
