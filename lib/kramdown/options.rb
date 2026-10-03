@@ -478,6 +478,60 @@ module Kramdown
       Used by: RemoveHtmlTags converter
     EOF
 
+    define(:sanitize, Object, false, <<~EOF) do |val|
+      Sanitize the HTML output
+
+      If this option is enabled, the HTML converter sanitizes the document
+      tree structurally before conversion, using a policy that is fully
+      declared by the caller. The same rules are applied to elements created
+      from Markdown syntax (e.g. links and images) and to elements created
+      from embedded raw HTML.
+
+      The value can be:
+
+      * `false` (the default) to disable sanitization, i.e. the conversion
+        results stay unchanged.
+      * `true` to enable sanitization with the default policy (a conservative
+        set of allowed elements, attributes and URL schemes; relative URLs
+        are allowed; disallowed elements are removed together with their
+        content).
+      * A hash declaring the policy, with the following optional keys:
+        `:elements` (allowed HTML element names), `:attributes` (hash mapping
+        an element name or `'*'` to allowed attribute names), `:schemes`
+        (hash mapping a URL attribute name or `'*'` to allowed URL schemes),
+        `:url_attributes` (attributes treated as URLs), `:data_image_types`
+        (image sub types allowed for `data:` URLs), `:relative` (`:allow` or
+        `:deny` for relative URLs) and `:strategy` (`:remove` to delete
+        disallowed elements with their content or `:unwrap` to delete only
+        the element itself - the two strategies cannot be mixed).
+
+      URL attributes are normalized before the scheme check (HTML entities
+      are decoded, control characters are removed and the scheme is compared
+      case-insensitively); no URL is ever requested. The content of `style`
+      attributes/elements is not filtered by string replacement - they are
+      just not part of the default policy.
+
+      Every removed element or attribute is reported, together with its
+      source line and the reason, in the warnings of the document.
+
+      Default: false
+      Used by: Html converter
+    EOF
+      case val
+      when true, false, nil then !!val
+      when Hash then val
+      when String
+        case val.strip
+        when 'true' then true
+        when 'false' then false
+        else
+          raise Kramdown::Error, "Invalid value for option sanitize: #{val.inspect}"
+        end
+      else
+        raise Kramdown::Error, "Invalid type for option sanitize: #{val.class}"
+      end
+    end
+
     define(:header_offset, Integer, 0, <<~EOF)
       Sets the output offset for headers
 

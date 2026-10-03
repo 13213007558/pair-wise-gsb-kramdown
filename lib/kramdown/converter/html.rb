@@ -50,6 +50,12 @@ module Kramdown
         # stash string representation of symbol to avoid allocations from multiple interpolations.
         @highlighter_class = " highlighter-#{options[:syntax_highlighter]}"
         @dispatcher = Hash.new {|h, k| h[k] = :"convert_#{k}" }
+
+        if @options[:sanitize]
+          policy = Utils::Sanitizer.policy(@options[:sanitize])
+          @root, issues = Utils::Sanitizer.sanitize_tree(@root, policy)
+          issues.each {|issue| warning(issue.to_s) }
+        end
       end
 
       # Dispatch the conversion of the element +el+ to a +convert_TYPE+ method using the +type+ of
@@ -382,6 +388,7 @@ module Kramdown
       end
 
       def convert_root(el, indent)
+        el = @root if @options[:sanitize]
         result = inner(el, indent)
         if @footnote_location
           result.sub!(/#{@footnote_location}/, footnote_content.gsub(/\\/, "\\\\\\\\"))
