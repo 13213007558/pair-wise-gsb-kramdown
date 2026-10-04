@@ -1,0 +1,16 @@
+# Stock {#tbl1-h1-1}
+
+<table>
+  <thead>
+    <tr><th rowspan="2">Group</th><th rowspan="2">Item</th><th colspan="2">Fruit</th><th colspan="2">Vegetable</th></tr>
+    <tr><th>Fresh</th><th>Dried</th><th>Fresh</th><th>Dried</th></tr>
+  </thead>
+  <tbody>
+    <tr><td scope="rowgroup" rowspan="2">Local</td><td scope="row">Apples</td><td>5</td><td>2</td><td>0</td><td>0</td></tr>
+    <tr><td scope="row">Pears</td><td>3</td><td>1</td><td>0</td><td>0</td></tr>
+  </tbody>
+  <tbody>
+    <tr><td scope="rowgroup" rowspan="2">Imported</td><td scope="row">Carrots</td><td>0</td><td>0</td><td>7</td><td>4</td></tr>
+    <tr><td scope="row">Beets</td><td>0</td><td>0</td><td headers="tbl1-h5-1 tbl1-h5-2 tbl1-h1-5 tbl1-h2-6">6</td><td>2</td></tr>
+  </tbody>
+</table>

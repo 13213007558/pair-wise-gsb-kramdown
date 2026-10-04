@@ -46,6 +46,8 @@ module Kramdown
         @toc_code = nil
         @indent = 2
         @stack = []
+        @accessible_table_nr = 0
+        @accessible_cells = {}
 
         # stash string representation of symbol to avoid allocations from multiple interpolations.
         @highlighter_class = " highlighter-#{options[:syntax_highlighter]}"
@@ -210,26 +212,37 @@ module Kramdown
       end
 
       def convert_html_element(el, indent)
+        prepare_accessible_table(el) if @options[:accessible_tables] && el.value == 'table'
         res = inner(el, indent)
+        value = el.value
+        attr = el.attr
+        if (cell_info = @accessible_cells[el])
+          value = cell_info[:value] if cell_info[:value]
+          if cell_info[:id] || cell_info[:headers]
+            attr = attr.dup
+            attr['id'] = cell_info[:id] if cell_info[:id]
+            attr['headers'] = cell_info[:headers] if cell_info[:headers]
+          end
+        end
         if el.options[:category] == :span
-          "<#{el.value}#{html_attributes(el.attr)}" + \
-            (res.empty? && HTML_ELEMENTS_WITHOUT_BODY.include?(el.value) ? " />" : ">#{res}</#{el.value}>")
+          "<#{value}#{html_attributes(attr)}" + \
+            (res.empty? && HTML_ELEMENTS_WITHOUT_BODY.include?(value) ? " />" : ">#{res}</#{value}>")
         else
           output = +''
           if @stack.last.type != :html_element || @stack.last.options[:content_model] != :raw
             output << ' ' * indent
           end
-          output << "<#{el.value}#{html_attributes(el.attr)}"
+          output << "<#{value}#{html_attributes(attr)}"
           if el.options[:is_closed] && el.options[:content_model] == :raw
             output << " />"
           elsif !res.empty? && el.options[:content_model] != :block
-            output << ">#{res}</#{el.value}>"
+            output << ">#{res}</#{value}>"
           elsif !res.empty?
-            output << ">\n#{res.chomp}\n" << ' ' * indent << "</#{el.value}>"
-          elsif HTML_ELEMENTS_WITHOUT_BODY.include?(el.value)
+            output << ">\n#{res.chomp}\n" << ' ' * indent << "</#{value}>"
+          elsif HTML_ELEMENTS_WITHOUT_BODY.include?(value)
             output << " />"
           else
-            output << "></#{el.value}>"
+            output << "></#{value}>"
           end
           output << "\n" if @stack.last.type != :html_element || @stack.last.options[:content_model] != :raw
           output
@@ -247,6 +260,7 @@ module Kramdown
       alias convert_xml_pi convert_xml_comment
 
       def convert_table(el, indent)
+        prepare_accessible_table(el) if el.type == :table && @options[:accessible_tables]
         format_as_indented_block_html(el.type, el.attr, inner(el, indent), indent)
       end
       alias convert_thead convert_table
@@ -258,14 +272,218 @@ module Kramdown
 
       def convert_td(el, indent)
         res = inner(el, indent)
-        type = (@stack[-2].type == :thead ? :th : :td)
+        cell_info = @accessible_cells[el]
+        type = (cell_info ? cell_info[:header] : @stack[-2].type == :thead) ? :th : :td
         attr = el.attr
         alignment = @stack[-3].options[:alignment][@stack.last.children.index(el)]
-        if alignment != :default
-          attr = el.attr.dup
-          attr['style'] = (attr.key?('style') ? "#{attr['style']}; " : '') + "text-align: #{alignment}"
+        if (cell_info && (cell_info[:id] || cell_info[:headers])) || alignment != :default
+          attr = attr.dup
+          if cell_info
+            attr['id'] = cell_info[:id] if cell_info[:id]
+            attr['headers'] = cell_info[:headers] if cell_info[:headers]
+          end
+          if alignment != :default
+            attr['style'] = (attr.key?('style') ? "#{attr['style']}; " : '') + "text-align: #{alignment}"
+          end
         end
         format_as_block_html(type, attr, res.empty? ? entity_to_str(ENTITY_NBSP) : res, indent)
+      end
+
+      # Struct holding the grid position and the role of a single table cell while the
+      # accessibility attributes of a table are computed.
+      AccessibleTableCell = Struct.new(:el, :header, :scope, :row, :col, :rows, :cols,
+                                       :section, :section_type, :id, :headers, keyword_init: true)
+      private_constant :AccessibleTableCell
+
+      # Compute the accessibility attributes (stable header cell IDs and data cell +headers+
+      # associations) for the table element +el+, which may either be a native :table element or
+      # an HTML element with the value 'table'. The computed attributes are stored in
+      # +@accessible_cells+ and applied when the affected cells are converted so that the
+      # document tree itself is not modified.
+      #
+      # Header cells (cells of the table head section as well as cells explicitly marked with a
+      # valid +scope+ attribute) get an +id+ attribute unless they are blank or already have one.
+      # Each data cell gets a +headers+ attribute referencing the IDs of all applicable header
+      # cells, taking row, column and group headers as well as +rowspan+/+colspan+ coverage into
+      # account. Existing +headers+ attributes are kept as-is but their references are checked.
+      def prepare_accessible_table(table)
+        native = (table.type == :table)
+        @accessible_table_nr += 1
+
+        grid = []
+        cells = []
+        row_nr = 0
+        accessible_table_sections(table, native).each do |section, section_type, rows|
+          rows.each_with_index do |row, row_in_section|
+            grid[row_nr] ||= []
+            col_nr = 0
+            accessible_table_row_cells(row, native).each do |cell_el|
+              col_nr += 1 while grid[row_nr][col_nr]
+              colspan = [cell_el.attr['colspan'].to_i, 1].max
+              rowspan = cell_el.attr['rowspan'].to_i
+              rowspan = rows.size - row_in_section if rowspan <= 0 && cell_el.attr['rowspan']
+              rowspan = [[rowspan, 1].max, rows.size - row_in_section].min
+
+              scope = cell_el.attr['scope']
+              if scope && !%w[row col rowgroup colgroup].include?(scope)
+                warning("Ignoring invalid scope attribute value '#{scope}' on table cell")
+                scope = nil
+              end
+              header = section_type == :thead || !scope.nil? || (!native && cell_el.value == 'th')
+              if header && scope.nil?
+                scope = (section_type == :thead ? (colspan > 1 ? 'colgroup' : 'col') :
+                         (rowspan > 1 ? 'rowgroup' : 'row'))
+              end
+
+              cell = AccessibleTableCell.new(el: cell_el, header: header, scope: scope,
+                                             row: row_nr, col: col_nr, rows: rowspan, cols: colspan,
+                                             section: section, section_type: section_type)
+              (row_nr...(row_nr + rowspan)).each do |r|
+                grid[r] ||= []
+                (col_nr...(col_nr + colspan)).each {|c| grid[r][c] = cell }
+              end
+              cells << cell
+              col_nr += colspan
+            end
+            row_nr += 1
+          end
+        end
+
+        cells.each do |cell|
+          next unless cell.header
+          if cell.el.attr['id']
+            cell.id = cell.el.attr['id']
+          elsif !accessible_table_cell_blank?(cell.el)
+            cell.id = generate_accessible_table_id(cell)
+          end
+        end
+
+        header_ids = {}
+        cells.each {|cell| header_ids[cell.id] = true if cell.header && cell.id }
+
+        cells.each do |cell|
+          if (refs = cell.el.attr['headers'])
+            refs.split.each do |ref|
+              if !header_ids.key?(ref) && !accessible_reserved_ids.key?(ref)
+                warning("The headers attribute of a table cell references the unknown ID '#{ref}'")
+              end
+            end
+            next
+          end
+          next if cell.header
+          applicable = cells.select do |other|
+            next false unless other.header && other.id
+            case other.scope
+            when 'col', 'colgroup'
+              other.row < cell.row && other.col < cell.col + cell.cols &&
+                cell.col < other.col + other.cols &&
+                (other.section_type == :thead || other.section.equal?(cell.section))
+            when 'row', 'rowgroup'
+              other.section.equal?(cell.section) && other.col + other.cols <= cell.col &&
+                other.row < cell.row + cell.rows && cell.row < other.row + other.rows
+            end
+          end
+          unless applicable.empty?
+            cell.headers = applicable.sort_by {|h| [h.row, h.col] }.map(&:id).join(' ')
+          end
+        end
+
+        cells.each do |cell|
+          info = {}
+          if native
+            info[:header] = cell.header
+          else
+            info[:value] = (cell.header ? 'th' : 'td')
+          end
+          info[:id] = cell.id if cell.header && cell.id && !cell.el.attr['id']
+          info[:headers] = cell.headers if cell.headers
+          @accessible_cells[cell.el] = info
+        end
+      end
+
+      # Return the row sections of the table element +el+ as an array of +[section, section_type,
+      # rows]+ triples where +section+ is an object uniquely identifying the section. Rows of an
+      # HTML table that are not wrapped in a section element are grouped into implicit body
+      # sections.
+      def accessible_table_sections(table, native)
+        sections = []
+        bare_rows = []
+        flush_bare_rows = lambda do
+          sections << [bare_rows, :tbody, bare_rows] unless bare_rows.empty?
+          bare_rows = []
+        end
+        table.children.each do |child|
+          if native
+            next unless %i[thead tbody tfoot].include?(child.type)
+            flush_bare_rows.call
+            rows = child.children.select {|c| c.type == :tr }
+            sections << [child, child.type, rows] unless rows.empty?
+          elsif child.type == :html_element && %w[thead tbody tfoot].include?(child.value)
+            flush_bare_rows.call
+            rows = child.children.select {|c| c.type == :html_element && c.value == 'tr' }
+            sections << [child, child.value.to_sym, rows] unless rows.empty?
+          elsif child.type == :html_element && child.value == 'tr'
+            bare_rows << child
+          else
+            flush_bare_rows.call
+          end
+        end
+        flush_bare_rows.call
+        sections
+      end
+
+      # Return the cell elements of the table row element +row+.
+      def accessible_table_row_cells(row, native)
+        if native
+          row.children.select {|c| c.type == :td }
+        else
+          row.children.select {|c| c.type == :html_element && (c.value == 'td' || c.value == 'th') }
+        end
+      end
+
+      # Return +true+ if the table cell element +el+ has no content other than whitespace.
+      def accessible_table_cell_blank?(el)
+        el.children.all? {|child| child.type == :text && !child.value.match?(/[^\s\u00A0]/) }
+      end
+
+      # Generate a stable, document-wide unique ID for the header cell +cell+ of the current
+      # table, avoiding collisions with IDs already used in the document.
+      def generate_accessible_table_id(cell)
+        reserved = accessible_reserved_ids
+        base = "tbl#{@accessible_table_nr}-h#{cell.row + 1}-#{cell.col + 1}"
+        candidate = base
+        counter = 0
+        while reserved.key?(candidate)
+          counter += 1
+          candidate = "#{base}-#{counter}"
+        end
+        reserved[candidate] = true
+        candidate
+      end
+
+      # Return a hash with all IDs that are already used as anchors in the document, i.e. explicit
+      # IDs of all elements, IDs that are automatically generated for headers and footnote IDs.
+      def accessible_reserved_ids
+        @accessible_reserved_ids ||= begin
+          ids = {}
+          collect = lambda do |el|
+            ids[el.attr['id']] = true if el.attr['id']
+            if el.type == :header && @options[:auto_ids] && !el.attr['id']
+              ids[@options[:auto_id_prefix] + basic_generate_id(el.options[:raw_text].to_s)] = true
+            elsif el.type == :footnote
+              name = "#{@options[:footnote_prefix]}#{el.options[:name]}"
+              ids["fn:#{name}"] = true
+              ids["fnref:#{name}"] = true
+            end
+            el.children.each {|child| collect.call(child) }
+          end
+          collect.call(@root)
+          (@used_ids || {}).each_key do |key|
+            ids[key] = true
+            ids[@options[:auto_id_prefix] + key] = true
+          end
+          ids
+        end
       end
 
       def convert_comment(el, indent)

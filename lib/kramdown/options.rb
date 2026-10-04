@@ -621,6 +621,25 @@ module Kramdown
       Used by: HTML converter
     EOF
 
+    define(:accessible_tables, Boolean, false, <<~EOF)
+      Add accessibility attributes to tables
+
+      If this option is `true`, the HTML converter adds a stable `id`
+      attribute to the header cells of a table and a `headers` attribute
+      to each data cell, referencing the IDs of all applicable header cells.
+      Row headers, column headers and group headers as well as cells
+      spanning multiple rows or columns (via `rowspan`/`colspan`) are
+      taken into account. Cells explicitly marked with a `scope`
+      attribute are rendered as header cells.
+
+      Existing `id`, `scope` and `headers` attributes are
+      respected; unresolvable `headers` references and invalid `scope`
+      values generate a warning.
+
+      Default: false
+      Used by: HTML converter
+    EOF
+
     define(:forbidden_inline_options, Object, %w[template], <<~EOF) do |val|
       Defines the options that may not be set using the {::options} extension
 
