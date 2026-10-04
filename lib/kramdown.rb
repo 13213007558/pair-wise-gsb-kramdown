@@ -8,3 +8,4 @@
 #
 
 require 'kramdown/document'
+require 'kramdown/structural_diff'
