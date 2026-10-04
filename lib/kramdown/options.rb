@@ -342,6 +342,22 @@ module Kramdown
       Used by: HTML converter, kramdown converter
     EOF
 
+    define(:accessible_tables, Boolean, false, <<~EOF)
+      Add accessible header associations to tables
+
+      If this option is `true`, the HTML converter assigns stable IDs to
+      table header cells and adds `headers` attributes to data cells. Row,
+      column, row group and column group headers are handled, including cells
+      spanning multiple rows or columns. Explicitly set `scope` and `headers`
+      attributes are preserved and explicit references are checked.
+
+      Generated IDs do not conflict with IDs already used elsewhere in the
+      document.
+
+      Default: false
+      Used by: HTML converter
+    EOF
+
     TOC_LEVELS_RANGE = (1..6).freeze
     TOC_LEVELS_ARRAY = TOC_LEVELS_RANGE.to_a.freeze
     private_constant :TOC_LEVELS_RANGE, :TOC_LEVELS_ARRAY

@@ -47,6 +47,14 @@ module Kramdown
         @indent = 2
         @stack = []
 
+        if @options[:accessible_tables]
+          @accessible_table_cells = {}
+          @accessible_tables = {}
+          @accessible_table_count = 0
+          @accessible_table_ids = {}
+          reserve_document_ids(@root)
+        end
+
         # stash string representation of symbol to avoid allocations from multiple interpolations.
         @highlighter_class = " highlighter-#{options[:syntax_highlighter]}"
         @dispatcher = Hash.new {|h, k| h[k] = :"convert_#{k}" }
@@ -210,6 +218,9 @@ module Kramdown
       end
 
       def convert_html_element(el, indent)
+        if @options[:accessible_tables] && el.type == :html_element && el.value == 'table'
+          prepare_accessible_table(el)
+        end
         res = inner(el, indent)
         if el.options[:category] == :span
           "<#{el.value}#{html_attributes(el.attr)}" + \
@@ -247,6 +258,7 @@ module Kramdown
       alias convert_xml_pi convert_xml_comment
 
       def convert_table(el, indent)
+        prepare_accessible_table(el) if @options[:accessible_tables] && el.type == :table
         format_as_indented_block_html(el.type, el.attr, inner(el, indent), indent)
       end
       alias convert_thead convert_table
@@ -260,12 +272,310 @@ module Kramdown
         res = inner(el, indent)
         type = (@stack[-2].type == :thead ? :th : :td)
         attr = el.attr
-        alignment = @stack[-3].options[:alignment][@stack.last.children.index(el)]
-        if alignment != :default
+        column = @accessible_table_cells&.dig(el, :column) || @stack.last.children.index(el)
+        alignment = @stack[-3].options[:alignment][column] if @stack[-3].type == :table
+        if alignment && alignment != :default
           attr = el.attr.dup
           attr['style'] = (attr.key?('style') ? "#{attr['style']}; " : '') + "text-align: #{alignment}"
         end
         format_as_block_html(type, attr, res.empty? ? entity_to_str(ENTITY_NBSP) : res, indent)
+      end
+
+      ACCESSIBLE_TABLE_SCOPES = %w[rowgroup row colgroup col].freeze
+      private_constant :ACCESSIBLE_TABLE_SCOPES
+
+      def reserve_document_ids(root)
+        generated_header_ids = {}
+        each_element(root) do |el|
+          add_used_id(el.attr['id']) if el.attr.is_a?(Hash) && el.attr['id']
+          if el.type == :header && @options[:auto_ids]
+            id = basic_generate_id(el.options[:raw_text].to_s)
+            id = 'section' if id.empty?
+            if el.attr['id'].nil?
+              if generated_header_ids.key?(id)
+                id = "#{id}-#{generated_header_ids[id] += 1}"
+              else
+                generated_header_ids[id] = 0
+              end
+              id = @options[:auto_id_prefix].to_s + id
+            end
+            add_used_id(id)
+            add_used_id("markdown-toc-#{id}")
+          elsif el.type == :footnote
+            add_used_id("fnref:#{@options[:footnote_prefix]}#{el.options[:name]}")
+            add_used_id("fn:#{@options[:footnote_prefix]}#{el.options[:name]}")
+          elsif el.type == :dl && el.options.dig(:ial, :refs)&.include?('auto_ids')
+            each_element(el) do |definition|
+              next unless definition.type == :dt
+
+              add_used_id(basic_generate_id(definition.options[:raw_text].to_s))
+            end
+          end
+        end
+        add_used_id('markdown-toc')
+      end
+
+      def add_used_id(id)
+        @accessible_table_ids[id] = true if id && !id.strip.empty?
+      end
+
+      def unique_accessible_table_id(table_number, row, column)
+        base = "table-#{table_number}-r#{row + 1}c#{column + 1}"
+        id = base
+        suffix = 1
+        while @accessible_table_ids.key?(id)
+          suffix += 1
+          id = "#{base}-#{suffix}"
+        end
+        @accessible_table_ids[id] = true
+        id
+      end
+
+      def prepare_accessible_table(table)
+        return if @accessible_tables&.key?(table)
+
+        @accessible_tables[table] = true
+
+        native = table.type == :table
+        rows = accessible_table_rows(table, native)
+        return if rows.empty?
+
+        @accessible_table_count += 1
+        records = []
+        occupied = {}
+        width = 0
+        rows.each_with_index do |row, row_index|
+          column_index = 0
+          cells_in(row, native).each do |cell|
+            column_index += 1 while occupied[[row_index, column_index]]
+            colspan = accessible_span(cell.attr['colspan'])
+            next if colspan.zero?
+
+            rowspan = accessible_span(cell.attr['rowspan'])
+            if rowspan.zero?
+              section_end = rows.rindex {|table_row| table_row[:section_id] == row[:section_id] }
+              rowspan = [section_end - row_index + 1, 1].max
+            end
+            rowspan.times do |row_offset|
+              colspan.times do |column_offset|
+                occupied[[row_index + row_offset, column_index + column_offset]] = true
+              end
+            end
+            column_index += colspan
+            width = [width, column_index].max
+          end
+
+          cells_in(row, native).each do |cell|
+            next unless accessible_span(cell.attr['colspan']).zero?
+
+            cell_column = 0
+            cell_column += 1 while occupied[[row_index, cell_column]]
+            occupied[[row_index, cell_column]] = true
+            width = [width, cell_column + 1].max
+          end
+        end
+
+        occupied.clear
+        rows.each_with_index do |row, row_index|
+          column_index = 0
+          cells_in(row, native).each do |cell|
+            column_index += 1 while occupied[[row_index, column_index]]
+            colspan = accessible_span(cell.attr['colspan'])
+            rowspan = accessible_span(cell.attr['rowspan'])
+            colspan = width - column_index if colspan.zero?
+            colspan = 1 if colspan.negative?
+            if rowspan.zero?
+              section_end = rows.rindex {|table_row| table_row[:section_id] == row[:section_id] }
+              rowspan = [section_end - row_index + 1, 1].max
+            end
+            record = {
+              element: cell,
+              section: row[:section],
+              section_id: row[:section_id],
+              row: row_index,
+              column: column_index,
+              colspan: accessible_span(cell.attr['colspan']),
+              rowspan: accessible_span(cell.attr['rowspan']),
+              grid_colspan: colspan,
+              grid_rowspan: rowspan
+            }
+            records << record
+            @accessible_table_cells[cell] = record
+            record[:grid_rowspan].times do |row_offset|
+              record[:grid_colspan].times do |column_offset|
+                occupied[[row_index + row_offset, record[:column] + column_offset]] = record
+              end
+            end
+            column_index += colspan
+          end
+        end
+
+        headers = records.select {|record| accessible_cell_tag(record, native) == 'th' }
+        header_ids = {}
+        headers.each do |record|
+          id = record[:element].attr['id']
+          if id.nil? || id.strip.empty?
+            id = unique_accessible_table_id(@accessible_table_count, record[:row], record[:column])
+          end
+          record[:element].attr['id'] ||= id
+          record[:id] = record[:element].attr['id']
+          header_ids[record[:id]] = record
+        end
+
+        headers.each do |record|
+          record[:scope], record[:explicit_scope] = accessible_scope(record, native)
+        end
+        validate_accessible_headers(records, header_ids)
+        assign_accessible_headers(records, headers, native)
+      end
+
+      def accessible_table_rows(table, native)
+        rows = []
+        if native
+          table.children.each_with_index do |section, section_index|
+            next unless %i[thead tbody tfoot].include?(section.type)
+            section.children.each do |row|
+              if row.type == :tr
+                rows << {element: row, section: section.type.to_s, section_id: section_index}
+              end
+            end
+          end
+        else
+          section_index = -1
+          table.children.each do |child|
+            section_index += 1
+            section = implicit_section?(child) ? 'tbody' : child.value
+            collect_accessible_rows(child, section, section_index, rows)
+          end
+        end
+        rows
+      end
+
+      def collect_accessible_rows(element, section, section_id, rows)
+        return unless element.type == :html_element
+
+        if element.value == 'tr'
+          rows << {element: element, section: section, section_id: section_id}
+        elsif %w[thead tbody tfoot].include?(element.value)
+          element.children.each do |child|
+            collect_accessible_rows(child, element.value, section_id, rows)
+          end
+        end
+      end
+
+      def implicit_section?(element)
+        element.type == :html_element && element.value == 'tr'
+      end
+
+      def cells_in(row, native)
+        row[:element].children.select do |cell|
+          native ? cell.type == :td : cell.type == :html_element && %w[td th].include?(cell.value)
+        end
+      end
+
+      def accessible_cell_tag(record, native)
+        return 'th' if native && record[:section] == 'thead'
+
+        native ? 'td' : record[:element].value
+      end
+
+      def accessible_span(value)
+        span = value.to_s.strip
+        return 1 unless /\A\d+\z/.match?(span)
+
+        span.to_i
+      end
+
+      def accessible_scope(record, native)
+        scope = record[:element].attr['scope']
+        return [infer_accessible_scope(record, native), false] if scope.nil?
+
+        scope = scope.strip.downcase
+        return [infer_accessible_scope(record, native), false] if scope.empty? ||
+          scope == 'auto'
+
+        if ACCESSIBLE_TABLE_SCOPES.include?(scope)
+          [scope, true]
+        else
+          warning("Invalid scope '#{record[:element].attr['scope']}' " \
+                  "on table header cell '#{record[:id]}'")
+          [nil, true]
+        end
+      end
+
+      def infer_accessible_scope(record, native)
+        if native || record[:section] == 'thead'
+          return 'colgroup' if record[:grid_colspan] > 1
+
+          'col'
+        elsif record[:section] == 'tfoot'
+          'col'
+        elsif record[:grid_rowspan] > 1 || record[:grid_colspan] > 1
+          'rowgroup'
+        else
+          'row'
+        end
+      end
+
+      def validate_accessible_headers(records, header_ids)
+        records.each do |record|
+          value = record[:element].attr['headers']
+          next if value.nil?
+
+          value.split(/\s+/).reject(&:empty?).each do |id|
+            unless header_ids.key?(id)
+              warning("Table cell headers reference '#{id}' which does not reference " \
+                      'a header cell in the same table')
+            end
+          end
+        end
+      end
+
+      def assign_accessible_headers(records, headers, native)
+        records.each do |record|
+          next if accessible_cell_tag(record, native) != 'td'
+          next if record[:element].attr.key?('headers') || record[:section] == 'thead'
+
+          associated = headers.select do |header|
+            accessible_header_applies?(header, record)
+          end
+          next if associated.empty?
+
+          associated.sort_by! do |header|
+            [ACCESSIBLE_TABLE_SCOPES.index(header[:scope]) || 4, header[:row], header[:column]]
+          end
+          record[:element].attr['headers'] = associated.map {|header| header[:id] }.uniq.join(' ')
+        end
+      end
+
+      def accessible_header_applies?(header, record)
+        return false if header[:scope].nil?
+        column_section_applies = header[:explicit_scope] || header[:section] == 'thead' ||
+          header[:section_id] == record[:section_id]
+
+        column_intersects = header[:column] < record[:column] + record[:grid_colspan] &&
+          header[:column] + header[:grid_colspan] > record[:column]
+        row_intersects = header[:row] < record[:row] + record[:grid_rowspan] &&
+          header[:row] + header[:grid_rowspan] > record[:row]
+
+        case header[:scope]
+        when 'col'
+          column_section_applies && column_intersects && (header[:explicit_scope] ||
+            header[:row] + header[:grid_rowspan] <= record[:row])
+        when 'colgroup'
+          column_section_applies && column_intersects && (header[:explicit_scope] ||
+            header[:row] + header[:grid_rowspan] <= record[:row])
+        when 'row'
+          header[:section_id] == record[:section_id] && row_intersects
+        when 'rowgroup'
+          header[:section_id] == record[:section_id] &&
+            (header[:explicit_scope] || (row_intersects && record[:row] >= header[:row]))
+        end
+      end
+
+      def each_element(element, &block)
+        block.call(element)
+        element.children.each {|child| each_element(child, &block) }
       end
 
       def convert_comment(el, indent)
