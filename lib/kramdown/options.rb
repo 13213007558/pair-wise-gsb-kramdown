@@ -640,6 +640,67 @@ module Kramdown
       Used by: Kramdown converter
     EOF
 
+    define(:epub_title, String, 'Document', <<~EOF)
+      Defines the title of the generated EPUB publication
+
+      Default: 'Document'
+      Used by: EPUB converter
+    EOF
+
+    define(:epub_author, String, '', <<~EOF)
+      Defines the author (creator) of the generated EPUB publication
+
+      Default: '' (no creator element is emitted)
+      Used by: EPUB converter
+    EOF
+
+    define(:epub_language, String, 'en', <<~EOF)
+      Defines the language of the generated EPUB publication
+
+      Default: 'en'
+      Used by: EPUB converter
+    EOF
+
+    define(:epub_split_level, Integer, 1, <<~EOF) do |val|
+      Defines the header level used to split the document into chapters
+
+      A new chapter XHTML file is started whenever a header of the given
+      level appears directly in the document flow (e.g. a value of 2 splits
+      on level-2 headers). The value has to be an integer from 1 to 6.
+
+      Default: 1
+      Used by: EPUB converter
+    EOF
+      val = Integer(val) unless val.is_a?(Integer)
+      unless (1..6).cover?(val)
+        raise Kramdown::Error, "The option epub_split_level has to be an integer from 1 to 6"
+      end
+      val
+    end
+
+    define(:epub_identifier, String, '', <<~EOF)
+      Defines the unique identifier of the generated EPUB publication
+
+      If empty, a deterministic, reproducible identifier is derived from
+      the EPUB title.
+
+      Default: ''
+      Used by: EPUB converter
+    EOF
+
+    define(:epub_resource_root, String, '', <<~EOF)
+      Defines the directory used to resolve local resources
+
+      Relative references to local files (e.g. images) found in the
+      document are resolved against this directory, included in the EPUB
+      package and rewritten to their packaged locations. References that
+      cannot be resolved or external (absolute/http) references are left
+      untouched and a warning is issued.
+
+      Default: '' (local resources are not packaged)
+      Used by: EPUB converter
+    EOF
+
   end
 
 end

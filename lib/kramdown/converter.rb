@@ -28,6 +28,7 @@ module Kramdown
     autoload :HashAST, 'kramdown/converter/hash_ast'
     autoload :HashAst, 'kramdown/converter/hash_ast'
     autoload :Man, 'kramdown/converter/man'
+    autoload :Epub, 'kramdown/converter/epub'
 
     extend ::Kramdown::Utils::Configurable
 
