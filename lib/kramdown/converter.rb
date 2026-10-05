@@ -33,6 +33,10 @@ module Kramdown
 
     configurable(:syntax_highlighter)
 
+    # Namespace for math rendering extensions.
+    module MathEngine
+    end
+
     ['Minted', "Rouge"].each do |klass_name|
       kn_down = klass_name.downcase.intern
       add_syntax_highlighter(kn_down) do |converter, text, lang, type, opts|
@@ -49,7 +53,7 @@ module Kramdown
 
     configurable(:math_engine)
 
-    ["Mathjax"].each do |klass_name|
+    ["Mathjax", "MathML"].each do |klass_name|
       kn_down = klass_name.downcase.intern
       add_math_engine(kn_down) do |converter, el, opts|
         require "kramdown/converter/math_engine/#{kn_down}"

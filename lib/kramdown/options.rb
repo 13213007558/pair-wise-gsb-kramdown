@@ -529,6 +529,9 @@ module Kramdown
       blocks/spans. If this option is set to +nil+, no math engine is used and
       the math blocks/spans are output as is.
 
+      The built-in +mathml+ engine renders Presentation MathML without using a
+      browser or external TeX implementation.
+
       Options for the selected math engine can be set with the
       math_engine_opts configuration option.
 

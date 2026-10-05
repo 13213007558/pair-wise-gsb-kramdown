@@ -16,6 +16,7 @@
   * [Rouge](syntax_highlighter/rouge.html)
   * [Coderay](syntax_highlighter/coderay.html)
 * Math Engines
+  * [MathML](math_engine/mathml.html)
   * [MathJax](math_engine/mathjax.html)
   * [KaTeX](math_engine/katex.html)
   * [SsKaTeX](math_engine/sskatex.html)

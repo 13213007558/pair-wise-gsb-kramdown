@@ -1,0 +1,25 @@
+---
+title: MathML
+---
+
+## Math Engine MathML
+
+The mathml math engine converts an explicit TeX subset directly to Presentation MathML with the
+pure Ruby implementation bundled with kramdown. It needs no browser, JavaScript runtime, external
+TeX executable, or additional gem.
+
+The supported subset contains:
+
+* braces for groups and nested expressions
+* subscripts, superscripts, and primes
+* frac, dfrac, tfrac, sqrt, and indexed roots
+* common Greek letters, operators, relations, arrows, functions, spacing, and symbols
+* literal delimiters, left/right, middle, and big-style delimiters
+* the matrix, pmatrix, bmatrix, Bmatrix, vmatrix, and Vmatrix environments
+* text and the common math/text style commands
+
+Macros are never expanded and no external TeX implementation is invoked. Unsupported commands,
+environments, and characters remain errors. The error includes the source position as line,
+column, and zero-based offset instead of silently deleting the formula part. By default the error
+is rendered in a valid merror element; use math_engine_opts with errors set to :raise to raise
+Kramdown::Converter::MathEngine::MathML::ParseError instead.
