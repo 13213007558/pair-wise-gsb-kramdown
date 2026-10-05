@@ -49,7 +49,7 @@ module Kramdown
 
     configurable(:math_engine)
 
-    ["Mathjax"].each do |klass_name|
+    ["Mathjax", "Mathml"].each do |klass_name|
       kn_down = klass_name.downcase.intern
       add_math_engine(kn_down) do |converter, el, opts|
         require "kramdown/converter/math_engine/#{kn_down}"

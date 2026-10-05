@@ -1,0 +1,22 @@
+---
+title: MathML
+---
+
+## Math Engine MathML
+
+The built-in MathML math engine converts a fixed TeX subset directly into Presentation MathML. It
+is pure Ruby, does not use a browser, does not execute macros and never invokes an external TeX
+implementation.
+
+Supported TeX constructs are:
+
+* Braced groups and ordinary identifiers/numbers
+* Subscripts and superscripts, including combined scripts on a complete fraction or matrix
+* `rac`, `dfrac`, `	frac`, `sqrt{x}` and `sqrt[n]{x}`
+* Common Greek letters, relations, operators, arrows, functions and spacing commands
+* Parentheses, brackets, braces, vertical bars, angle brackets and `left`/`ight` delimiter pairs
+* The `matrix`, `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `Vmatrix` and `smallmatrix` environments
+
+Use `math_engine: :mathml` when creating a `Kramdown::Document`. Unsupported commands or invalid
+syntax are represented with `<merror>`, including the source command and its line, column and offset
+within the formula. They are not silently removed.

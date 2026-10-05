@@ -103,8 +103,10 @@ Also available are precompiling versions to eliminate the need for client-side J
 kramdown runs, in order to perform the precompilation. The resulting pages still require CSS and
 fonts, but no Javascript anymore.
 
-Alternative math engines are [Ritex](../math_engine/ritex.html) and
-[itex2MML](../math_engine/itex2mml.html) both of which output MathML.
+The built-in [MathML](../math_engine/mathml.html) math engine converts a fixed TeX subset directly
+to Presentation MathML without a browser, macros or external TeX. Alternative math engines are
+[Ritex](../math_engine/ritex.html) and [itex2MML](../math_engine/itex2mml.html), which also output
+MathML.
 
 
 ## Emphasis
