@@ -21,6 +21,7 @@ module Kramdown
 
     autoload :Base, 'kramdown/converter/base'
     autoload :Html, 'kramdown/converter/html'
+    autoload :Epub, 'kramdown/converter/epub'
     autoload :Latex, 'kramdown/converter/latex'
     autoload :Kramdown, 'kramdown/converter/kramdown'
     autoload :Toc, 'kramdown/converter/toc'

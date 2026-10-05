@@ -16,7 +16,7 @@
 # supported formats:
 #
 # * input formats: kramdown (a Markdown superset), Markdown, GFM, HTML
-# * output formats: HTML, kramdown, LaTeX (and therefore PDF), PDF via Prawn
+# * output formats: HTML, kramdown, LaTeX (and therefore PDF), PDF via Prawn, EPUB
 #
 # All the documentation on the available input and output formats is available at
 # http://kramdown.gettalong.org.

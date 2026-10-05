@@ -489,6 +489,58 @@ module Kramdown
       Used by: HTML converter, Kramdown converter, Latex converter
     EOF
 
+    define(:epub_chapter_level, Integer, 1, <<~EOF) do |val|
+      Defines the header level at which a document is split into EPUB chapters
+
+      A new chapter is started at every header with a level equal to or lower
+      than the specified level.
+
+      Default: 1
+      Used by: EPUB converter
+    EOF
+      unless (1..6).cover?(val)
+        raise Kramdown::Error, "Level for option epub_chapter_level has to be an integer from 1 to 6"
+      end
+      val
+    end
+
+    define(:epub_title, String, '', <<~EOF)
+      The title of the EPUB book
+
+      If no title is set, the title of the first chapter is used.
+
+      Default: ''
+      Used by: EPUB converter
+    EOF
+
+    define(:epub_language, String, 'en', <<~EOF)
+      The language of the EPUB book
+
+      The value has to be a valid BCP 47 language tag, e.g. "en" or "de".
+
+      Default: 'en'
+      Used by: EPUB converter
+    EOF
+
+    define(:epub_identifier, String, '', <<~EOF)
+      The unique identifier of the EPUB book
+
+      If no identifier is set, a random UUID is generated.
+
+      Default: ''
+      Used by: EPUB converter
+    EOF
+
+    define(:epub_resource_dir, String, '.', <<~EOF)
+      The directory used for resolving local resources of the EPUB book
+
+      Local resources (e.g. images referenced by relative paths) are looked
+      up relative to this directory and packaged into the EPUB archive.
+
+      Default: '.'
+      Used by: EPUB converter
+    EOF
+
     define(:syntax_highlighter, Symbol, :rouge, <<~EOF)
       Set the syntax highlighter
 

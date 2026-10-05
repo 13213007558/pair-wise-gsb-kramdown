@@ -31,7 +31,7 @@ due to its flexibility (by creating an internal AST) it supports other input and
 well. Here is a list of the supported formats:
 
 * input formats: kramdown (a Markdown superset), Markdown, GFM, HTML
-* output formats: HTML, kramdown, LaTeX (and therefore PDF), PDF via Prawn
+* output formats: HTML, kramdown, LaTeX (and therefore PDF), PDF via Prawn, EPUB
 
 All the documentation on the available input and output formats is available in the **doc/**
 directory and online at <http://kramdown.gettalong.org>.
